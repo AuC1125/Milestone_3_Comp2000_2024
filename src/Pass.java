@@ -13,13 +13,15 @@ public class Pass {
         // Define required fields as a List
         List<String> requiredFields = Arrays.asList("born", "issued", "expires", "height", "hair", "eyes", "usmca");
 
+        // Open the file for reading as a Stream
         try (Stream<String> lines = Files.lines(Paths.get("data/pass.txt"))) {
-            // Process data using Stream pipeline
+            // Parse input into records separated by a blank line
             List<Map<String, String>> validRecords = Arrays.stream(lines.collect(Collectors.joining("\n")).split("\n{2}"))
                 .map(record -> {
                     // Parse colon-separated key/value pairs into a HashMap
                     Map<String, String> obj = new HashMap<>();
-                    Arrays.stream(record.replace("\n", " ").split(" "))
+                    Arrays.stream(record.replace("\n", " ")
+                        .split(" "))
                         .forEach(str -> {
                             String[] parts = str.split(":");
                             obj.put(parts[0], parts[1]);
@@ -30,14 +32,13 @@ public class Pass {
                     // Check if all required fields except "state" are present and validate with simplified logic
                     return requiredFields.stream().allMatch(obj::containsKey) && simpleValidateLicense(obj, validEyeColors);
                 })
+                .peek(obj -> {
+                    // Print each validated record separated by a dashed line
+                    System.out.println(repeat("-", 132));
+                    System.out.println(obj);
+                })
                 .limit(2)  // Limit to the first two valid records
                 .collect(Collectors.toList());
-
-            // Print each validated record
-            validRecords.forEach(obj -> {
-                System.out.println(repeat("-", 132));
-                System.out.println(obj);
-            });
 
             // Print the count of validated records separated by a double-dashed line
             System.out.println(repeat("=", 132));
