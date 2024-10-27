@@ -1,80 +1,81 @@
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Year;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Pass {
     public static void main(String[] args) throws IOException {
-        // Define valid eye colors as a Set
-        Set<String> validEyeColors = new HashSet<>(Arrays.asList("amber", "blue", "brown", "gray", "green", "hazel", "other"));
+        Set<String> validEyeColors = Set.of("amber", "blue", "brown", "gray", "green", "hazel", "other");
+        List<String> requiredFields = List.of("born", "issued", "expires", "height", "hair", "eyes", "usmca");
 
-        // Define required fields as a List
-        List<String> requiredFields = Arrays.asList("born", "issued", "expires", "height", "hair", "eyes", "usmca");
-
-        // Open the file for reading as a Stream
         try (Stream<String> lines = Files.lines(Paths.get("data/pass.txt"))) {
-            // Parse input into records separated by a blank line
             List<Map<String, String>> validRecords = Arrays.stream(lines.collect(Collectors.joining("\n")).split("\n{2}"))
-                .map(record -> {
-                    // Parse colon-separated key/value pairs into a HashMap
-                    Map<String, String> obj = new HashMap<>();
-                    Arrays.stream(record.replace("\n", " ")
-                        .split(" "))
-                        .forEach(str -> {
-                            String[] parts = str.split(":");
-                            obj.put(parts[0], parts[1]);
-                        });
-                    return obj;
-                })
-                .filter(obj -> {
-                    // Check if all required fields except "state" are present and validate with simplified logic
-                    return requiredFields.stream().allMatch(obj::containsKey) && simpleValidateLicense(obj, validEyeColors);
-                })
-                .peek(obj -> {
-                    // Print each validated record separated by a dashed line
-                    System.out.println(repeat("-", 132));
-                    System.out.println(obj);
-                })
-                .limit(2)  // Limit to the first two valid records
+                .map(Pass::parseRecord)
+                .filter(record -> isValidRecord(record, requiredFields, validEyeColors))
+                .peek(record -> System.out.println(repeat("-", 132) + "\n" + record))
+                .limit(2)
                 .collect(Collectors.toList());
 
-            // Print the count of validated records separated by a double-dashed line
             System.out.println(repeat("=", 132));
             System.out.println("Valid records: " + validRecords.size());
         }
     }
 
-    // Simplified validation to identify if records are being filtered incorrectly
-    private static boolean simpleValidateLicense(Map<String, String> obj, Set<String> validEyeColors) {
+    private static Map<String, String> parseRecord(String record) {
+        return Arrays.stream(record.replace("\n", " ").split(" "))
+                .map(entry -> entry.split(":"))
+                .collect(Collectors.toMap(parts -> parts[0], parts -> parts[1]));
+    }
+
+    private static boolean isValidRecord(Map<String, String> record, List<String> requiredFields, Set<String> validEyeColors) {
+        int currentYear = Year.now().getValue();
         try {
-            // Only basic checks on each field
-            if (!obj.get("born").matches("\\d{4}")) return false;
-            if (!obj.get("issued").matches("\\d{4}")) return false;
-            if (!obj.get("expires").matches("\\d{4}")) return false;
-
-            // Only check height format but skip specific range constraints
-            String height = obj.get("height");
-            if (!(height.endsWith("cm") || height.endsWith("in"))) return false;
-
-            // Basic hair color, eye color, and license number checks
-            if (!obj.get("hair").startsWith("#")) return false;
-            if (!validEyeColors.contains(obj.get("eyes"))) return false;
-            if (obj.get("usmca").length() != 9) return false;
-
-            return true;
+            return requiredFields.stream().allMatch(record::containsKey) &&
+                   isOfValidAge(record.get("born"), currentYear) &&
+                   isValidIssuedYear(record.get("issued"), currentYear) &&
+                   isValidExpiryYear(record.get("expires"), currentYear) &&
+                   isValidHeight(record.get("height")) &&
+                   isValidHairColor(record.get("hair")) &&
+                   validEyeColors.contains(record.get("eyes")) &&
+                   record.get("usmca").matches("\\d{9}");
         } catch (Exception e) {
             return false;
         }
     }
 
-    // Loop-based method to repeat a string
-    private static String repeat(String str, int times) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < times; i++) {
-            sb.append(str);
+    private static boolean isOfValidAge(String born, int currentYear) {
+        return currentYear - Integer.parseInt(born) >= 21;
+    }
+
+    private static boolean isValidIssuedYear(String issued, int currentYear) {
+        int issuedYear = Integer.parseInt(issued);
+        return issuedYear <= currentYear && currentYear - issuedYear <= 10;
+    }
+
+    private static boolean isValidExpiryYear(String expires, int currentYear) {
+        int expiryYear = Integer.parseInt(expires);
+        return expiryYear >= currentYear && expiryYear - currentYear <= 10;
+    }
+
+    private static boolean isValidHeight(String height) {
+        if (height.endsWith("cm")) {
+            int heightCm = Integer.parseInt(height.replace("cm", ""));
+            return heightCm >= 150 && heightCm <= 193;
+        } else if (height.endsWith("in")) {
+            int heightIn = Integer.parseInt(height.replace("in", ""));
+            return heightIn >= 59 && heightIn <= 76;
         }
-        return sb.toString();
+        return false;
+    }
+
+    private static boolean isValidHairColor(String hair) {
+        return hair.matches("#[0-9a-fA-F]{6}");
+    }
+
+    private static String repeat(String str, int times) {
+        return str.repeat(times);
     }
 }
